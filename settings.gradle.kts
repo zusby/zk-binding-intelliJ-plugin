@@ -1,1 +1,1 @@
-rootProject.name = "zk-intellij-plugin"
+rootProject.name = "zk-binding-intellij-plugin"
