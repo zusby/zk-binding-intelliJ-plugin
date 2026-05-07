@@ -1,0 +1,71 @@
+<idea-plugin>
+    <id>com.zusby.zkplugin.binding</id>
+    <name>ZK Framework Variables Binding</name>
+    <vendor email="support@zkplugin.com" url="https://www.zkoss.org">ZK Plugin Team</vendor>
+
+    <description><![CDATA[
+    <h2>Supporto completo per ZK Framework MVVM bindings</h2>
+    <p>Questo plugin migliora drasticamente l'esperienza di sviluppo con ZK Framework in IntelliJ IDEA.</p>
+    
+    <h3>Funzionalità principali:</h3>
+    <ul>
+        <li><b>Rilevamento Usage Automatico:</b> I getter/setter utilizzati nei file .zul vengono riconosciuti come "usati"</li>
+        <li><b>Navigazione Bidirezionale:</b> Naviga velocemente tra file .zul e metodi Java con Ctrl+Click</li>
+        <li><b>Gutter Icons:</b> Icone nella gutter che mostrano dove i metodi sono usati nei file .zul</li>
+        <li><b>Find Usages Completo:</b> Trova tutti gli utilizzi di un metodo inclusi quelli nei binding ZK</li>
+        <li><b>Supporto Completo Binding:</b> @bind, @load, @save, @init, @command e tutti gli altri</li>
+        <li><b>Refactoring Sicuro:</b> Rinomina metodi con aggiornamento automatico nei file .zul</li>
+    </ul>
+    
+    <h3>Binding supportati:</h3>
+    <ul>
+        <li>@bind(vm.propertyName)</li>
+        <li>@load(vm.propertyName)</li>
+        <li>@save(vm.propertyName)</li>
+        <li>@init(vm.propertyName)</li>
+        <li>@command('methodName')</li>
+        <li>E tutti gli altri pattern ZK MVVM</li>
+    </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>Version 1.0.0 (2025)</h3>
+    <ul>
+        <li>Rilascio iniziale</li>
+        <li>Rilevamento automatico usage per getter/setter</li>
+        <li>Navigazione completa Java ↔ ZUL</li>
+        <li>Supporto per tutti i tipi di binding ZK</li>
+        <li>Gutter icons per indicare gli usage</li>
+    </ul>
+    ]]></change-notes>
+
+    <!-- Requires IntelliJ IDEA 2026.1+ -->
+    <idea-version since-build="261"/>
+
+    <!-- Plugin dependencies -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+    <depends>com.intellij.modules.xml</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Implicit usage provider: marca getter/setter come "usati" se trovati in .zul -->
+        <implicitUsageProvider implementation="com.zusby.zkplugin.ZkImplicitUsageProvider"/>
+
+        <!-- Reference contributor: permette navigazione da .zul a Java -->
+        <psi.referenceContributor 
+                language="XML"
+                implementation="com.zusby.zkplugin.ZkBindingReferenceContributor"/>
+
+        <!-- Line marker provider: mostra icone nella gutter dei metodi Java usati in .zul -->
+        <codeInsight.lineMarkerProvider 
+                language="JAVA"
+                implementationClass="com.zusby.zkplugin.ZkLineMarkerProvider"/>
+
+        <!-- Find usages provider: include usages nei file .zul -->
+        <referencesSearch implementation="com.zusby.zkplugin.ZkReferencesSearcher"/>
+    </extensions>
+
+    <actions>
+        <!-- Azioni personalizzate se necessarie in futuro -->
+    </actions>
+</idea-plugin>
