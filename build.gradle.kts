@@ -17,7 +17,7 @@ java {
 
 intellij {
     version.set("2026.1")
-    type.set("IC") // IntelliJ IDEA Community Edition
+    type.set("IC")
     plugins.set(listOf("com.intellij.java"))
 }
 
