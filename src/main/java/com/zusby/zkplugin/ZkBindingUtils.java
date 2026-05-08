@@ -145,9 +145,24 @@ public class ZkBindingUtils {
             Matcher m = Pattern.compile(
                     "class\\s+" + Pattern.quote(className) + "\\s+extends\\s+([a-zA-Z0-9_.]+)"
             ).matcher(script);
-            if (m.find()) return m.group(1);
+            if (m.find()) {
+                String superName = m.group(1);
+                if (!superName.contains(".")) {
+                    String resolved = resolveImportInScript(script, superName);
+                    if (resolved != null) return resolved;
+                }
+                return superName;
+            }
         }
         return null;
+    }
+
+    @Nullable
+    private static String resolveImportInScript(String script, String simpleName) {
+        Matcher m = Pattern.compile(
+                "import\\s+([a-zA-Z0-9_.]+\\." + Pattern.quote(simpleName) + ")\\s*;"
+        ).matcher(script);
+        return m.find() ? m.group(1) : null;
     }
 
     /**

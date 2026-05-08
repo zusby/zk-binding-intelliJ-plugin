@@ -2,6 +2,7 @@ package com.zusby.zkplugin;
 
 import com.intellij.openapi.application.QueryExecutorBase;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -83,7 +84,7 @@ public class ZkReferencesSearcher extends QueryExecutorBase<PsiReference, Refere
         private final PsiMethod targetMethod;
 
         public ZkUsageReference(@NotNull PsiElement element, @NotNull PsiMethod targetMethod) {
-            super(element, element.getTextRangeInParent());
+            super(element, new TextRange(0, element.getTextLength()));
             this.targetMethod = targetMethod;
         }
 
