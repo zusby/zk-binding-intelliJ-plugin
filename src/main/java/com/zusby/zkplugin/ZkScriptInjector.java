@@ -28,9 +28,21 @@ public class ZkScriptInjector implements MultiHostInjector {
         String text = context.getText();
         if (text.trim().isEmpty()) return;
 
+        int start = 0;
+        int end = context.getTextLength();
+
+        int cdataStart = text.indexOf("<![CDATA[");
+        int cdataEnd   = text.lastIndexOf("]]>");
+        if (cdataStart >= 0 && cdataEnd > cdataStart) {
+            start = cdataStart + 9;
+            end   = cdataEnd;
+        }
+
+        if (end <= start) return;
+
         registrar.startInjecting(JavaLanguage.INSTANCE)
                  .addPlace(null, null, (PsiLanguageInjectionHost) context,
-                           new TextRange(0, context.getTextLength()))
+                           new TextRange(start, end))
                  .doneInjecting();
     }
 
