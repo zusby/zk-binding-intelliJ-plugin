@@ -63,6 +63,9 @@
 
         <!-- Find usages provider: include usages nei file .zul -->
         <referencesSearch implementation="com.zusby.zkplugin.ZkReferencesSearcher"/>
+
+        <!-- Java language injection into <zscript> blocks -->
+        <multiHostInjector implementation="com.zusby.zkplugin.ZkScriptInjector"/>
     </extensions>
 
     <actions>

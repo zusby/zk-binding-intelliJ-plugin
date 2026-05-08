@@ -19,7 +19,10 @@
       "PowerShell(cd \"C:\\\\Users\\\\gaspa\\\\Desktop\\\\zk-intellij-plugin\"; .\\\\gradlew.bat dependencies --configuration testCompileClasspath 2>&1 | findstr \"TestFrameworkType\" | Select-Object -First 5; & \"C:\\\\Users\\\\gaspa\\\\.jdks\\\\ms-21.0.10\\\\bin\\\\jar.exe\" tf \"$env:USERPROFILE\\\\.gradle\\\\caches\\\\modules-2\\\\files-2.1\\\\org.jetbrains.intellij.platform\\\\intellij-platform-gradle-plugin\\\\2.5.0\" 2>&1 | Select-Object -First 5)",
       "Bash(mkdir -p \"C:\\\\Users\\\\gaspa\\\\Desktop\\\\zk-test-project\\\\src\\\\main\\\\java\\\\com\\\\test\")",
       "Bash(mkdir -p \"C:\\\\Users\\\\gaspa\\\\Desktop\\\\zk-test-project\\\\src\\\\main\\\\webapp\\\\WEB-INF\")",
-      "Bash(./gradlew clean *)"
+      "Bash(./gradlew clean *)",
+      "Bash(.\\\\gradlew compileJava)",
+      "Bash(./gradlew compileJava)",
+      "PowerShell(gradle *)"
     ]
   }
 }
