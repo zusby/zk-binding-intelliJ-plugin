@@ -16,6 +16,7 @@ dependency-reduced-pom.xml
 
 # Build
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.ear
 *.class
@@ -32,3 +33,5 @@ build/
 /README.md
 /.gradle/9.0.0/fileHashes/fileHashes.bin
 /.gradle/
+
+/.intellijPlatform/

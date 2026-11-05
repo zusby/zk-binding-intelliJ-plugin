@@ -3,43 +3,66 @@ package com.zusby.zkplugin;
 import com.intellij.codeInsight.daemon.LineMarkerInfo;
 import com.intellij.codeInsight.daemon.LineMarkerProvider;
 import com.intellij.codeInsight.navigation.NavigationGutterIconBuilder;
-import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.util.NotNullLazyValue;
 import com.intellij.psi.*;
-import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.xml.XmlFile;
 import com.intellij.util.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Adds a gutter icon next to Java methods that are referenced by a ZK binding expression.
  * Clicking the icon navigates to the binding site in the .zul file.
+ * <p>
+ * The search runs in the "slow" line-marker pass (background, after the file is highlighted)
+ * instead of {@link #getLineMarkerInfo}, which is called for every identifier on the
+ * critical highlighting path. Navigation targets are only turned into PSI when clicked.
  */
 public class ZkLineMarkerProvider implements LineMarkerProvider {
 
     @Override
     public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
-        if (!(element instanceof PsiIdentifier)) return null;
+        return null;
+    }
 
-        PsiElement parent = element.getParent();
-        if (!(parent instanceof PsiMethod)) return null;
+    @Override
+    public void collectSlowLineMarkers(@NotNull List<? extends PsiElement> elements,
+                                       @NotNull Collection<? super LineMarkerInfo<?>> result) {
+        for (PsiElement element : elements) {
+            ProgressManager.checkCanceled();
+            if (!(element instanceof PsiIdentifier) || !(element.getParent() instanceof PsiMethod)) continue;
+            PsiMethod method = (PsiMethod) element.getParent();
+            if (method.getNameIdentifier() != element || !isZkRelevantMethod(method)) continue;
 
-        PsiMethod method = (PsiMethod) parent;
-        if (!isZkRelevantMethod(method)) return null;
+            List<ZkBindingUtils.Usage> usages = ZkBindingUtils.findUsages(method);
+            if (usages.isEmpty()) continue;
 
-        List<PsiElement> targets = findZulReferences(method);
-        if (targets.isEmpty()) return null;
+            Set<PsiFile> files = new HashSet<>();
+            for (ZkBindingUtils.Usage u : usages) files.add(u.file);
 
-        return NavigationGutterIconBuilder
-                .create(PlatformIcons.XML_TAG_ICON)
-                .setTargets(targets)
-                .setTooltipText("Used in " + targets.size() + " ZUL file" + (targets.size() > 1 ? "s" : ""))
-                .createLineMarkerInfo(element);
+            result.add(NavigationGutterIconBuilder
+                    .create(PlatformIcons.XML_TAG_ICON)
+                    .setTargets(NotNullLazyValue.lazy(() -> navigationTargets(usages)))
+                    .setTooltipText("Used " + usages.size() + (usages.size() > 1 ? " times" : " time")
+                            + " in " + files.size() + " ZUL file" + (files.size() > 1 ? "s" : ""))
+                    .createLineMarkerInfo(element));
+        }
+    }
+
+    private static Collection<PsiElement> navigationTargets(List<ZkBindingUtils.Usage> usages) {
+        List<PsiElement> targets = new ArrayList<>();
+        for (ZkBindingUtils.Usage u : usages) {
+            if (!u.file.isValid()) continue;
+            PsiElement target = toNavigatableTarget(u.file.findElementAt(u.offset));
+            if (target != null && !targets.contains(target)) targets.add(target);
+        }
+        return targets;
     }
 
     /**
@@ -55,42 +78,19 @@ public class ZkLineMarkerProvider implements LineMarkerProvider {
         if (name.startsWith("set") && method.getParameterList().getParametersCount() == 1) {
             return true;
         }
-        for (PsiAnnotation annotation : method.getModifierList().getAnnotations()) {
-            String qName = annotation.getQualifiedName();
-            if (qName != null && qName.endsWith(".Command")) return true;
-        }
-        return false;
+        return !ZkViewModelResolver.commandNames(method).isEmpty();
     }
 
     /**
-     * Finds all PSI elements in .zul files that reference this method via a binding expression.
-     * Returns the property name token at each binding site so the gutter icon navigates there.
+     * Leaf tokens (e.g. XML_ATTRIBUTE_VALUE_TOKEN) are not navigatable in IntelliJ 2026.3,
+     * so clicking the gutter icon did nothing. Walk up to the nearest element that can
+     * actually be navigated to (normally the XmlAttributeValue holding the binding).
      */
-    private List<PsiElement> findZulReferences(PsiMethod method) {
-        List<PsiElement> references = new ArrayList<>();
-
-        String propertyName = ZkBindingUtils.getPropertyName(method);
-        if (propertyName == null) propertyName = method.getName();
-
-        PsiClass containingClass = method.getContainingClass();
-        if (containingClass == null) return references;
-
-        Project project = method.getProject();
-        Collection<VirtualFile> zulFiles = ZkBindingUtils.findZulFiles(project, GlobalSearchScope.projectScope(project));
-
-        for (VirtualFile vFile : zulFiles) {
-            PsiFile psiFile = PsiManager.getInstance(project).findFile(vFile);
-            if (!(psiFile instanceof XmlFile)) continue;
-
-            XmlFile xmlFile = (XmlFile) psiFile;
-            if (!ZkBindingUtils.usesViewModel(xmlFile, containingClass)) continue;
-
-            for (Integer offset : ZkBindingUtils.findBindingOffsets(xmlFile, propertyName)) {
-                PsiElement el = xmlFile.findElementAt(offset);
-                if (el != null) references.add(el);
-            }
+    @Nullable
+    private static PsiElement toNavigatableTarget(@Nullable PsiElement leaf) {
+        for (PsiElement e = leaf; e != null && !(e instanceof PsiFile); e = e.getParent()) {
+            if (e instanceof NavigatablePsiElement && ((NavigatablePsiElement) e).canNavigate()) return e;
         }
-
-        return references;
+        return leaf;
     }
 }

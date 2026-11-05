@@ -2,7 +2,6 @@ package com.zusby.zkplugin;
 
 import com.intellij.codeInsight.daemon.ImplicitUsageProvider;
 import com.intellij.psi.*;
-import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,14 +42,7 @@ public class ZkImplicitUsageProvider implements ImplicitUsageProvider {
     private boolean isUsedInZulFiles(PsiMethod method) {
         String propertyName = getPropertyName(method);
         if (propertyName == null) return false;
-        PsiClass containingClass = method.getContainingClass();
-        if (containingClass == null) return false;
-        return ZkBindingUtils.findZulBindings(
-                method.getProject(),
-                GlobalSearchScope.allScope(method.getProject()),
-                propertyName,
-                containingClass
-        );
+        return !ZkBindingUtils.findUsages(method).isEmpty();
     }
 
     /**

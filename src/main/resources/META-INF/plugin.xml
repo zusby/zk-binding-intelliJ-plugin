@@ -1,74 +1,97 @@
 <idea-plugin>
     <id>com.zusby.zkplugin.binding</id>
     <name>ZK Framework Variables Binding</name>
-    <vendor email="support@zkplugin.com" url="https://www.zkoss.org">ZK Plugin Team</vendor>
+    <vendor email="gaspareosicki@gmail.com" url="https://github.com/zusby">Zusby</vendor>
 
     <description><![CDATA[
-    <h2>Supporto completo per ZK Framework MVVM bindings</h2>
-    <p>Questo plugin migliora drasticamente l'esperienza di sviluppo con ZK Framework in IntelliJ IDEA.</p>
-    
-    <h3>Funzionalità principali:</h3>
+    <h2>Full ZK Framework MVVM binding support for IntelliJ IDEA</h2>
+    <p>Enhances the development experience for ZK Framework projects by bridging .zul files and Java ViewModels.</p>
+
+    <h3>Features:</h3>
     <ul>
-        <li><b>Rilevamento Usage Automatico:</b> I getter/setter utilizzati nei file .zul vengono riconosciuti come "usati"</li>
-        <li><b>Navigazione Bidirezionale:</b> Naviga velocemente tra file .zul e metodi Java con Ctrl+Click</li>
-        <li><b>Gutter Icons:</b> Icone nella gutter che mostrano dove i metodi sono usati nei file .zul</li>
-        <li><b>Find Usages Completo:</b> Trova tutti gli utilizzi di un metodo inclusi quelli nei binding ZK</li>
-        <li><b>Supporto Completo Binding:</b> @bind, @load, @save, @init, @command e tutti gli altri</li>
-        <li><b>Refactoring Sicuro:</b> Rinomina metodi con aggiornamento automatico nei file .zul</li>
+        <li><b>Automatic Usage Detection:</b> Getters, setters, and variables referenced in .zul files are recognised as "used" — no false "No usages" warnings.</li>
+        <li><b>Bidirectional Navigation:</b> Ctrl+Click on a binding expression in a .zul file jumps to the corresponding Java method or field.</li>
+        <li><b>Gutter Icons:</b> Gutter markers on Java methods show where they are used in .zul files.</li>
+        <li><b>Find Usages:</b> Finds all usages of a method, including ZK binding expressions in .zul files.</li>
+        <li><b>Full Binding Support:</b> @bind, @load, @save, @init, @command, and all other ZK MVVM binding annotations.</li>
+        <li><b>Safe Refactoring:</b> Renaming a Java method updates all matching binding references in .zul files automatically.</li>
+        <li><b>Code Completion:</b> Typing <code>@bind(vm.</code> lists the ViewModel properties (including inherited and nested ones); <code>@command('</code> lists available commands.</li>
+        <li><b>Java in &lt;zscript&gt;:</b> Full Java language support (completion, highlighting, navigation) inside &lt;zscript&gt; blocks in .zul files.</li>
     </ul>
-    
-    <h3>Binding supportati:</h3>
+
+    <h3>Supported binding patterns:</h3>
     <ul>
         <li>@bind(vm.propertyName)</li>
         <li>@load(vm.propertyName)</li>
         <li>@save(vm.propertyName)</li>
         <li>@init(vm.propertyName)</li>
         <li>@command('methodName')</li>
-        <li>E tutti gli altri pattern ZK MVVM</li>
+        <li>All other ZK MVVM binding patterns</li>
     </ul>
     ]]></description>
 
     <change-notes><![CDATA[
-    <h3>Version 1.0.0 (2025)</h3>
+    <h3>Version 1.1.3</h3>
     <ul>
-        <li>Rilascio iniziale</li>
-        <li>Rilevamento automatico usage per getter/setter</li>
-        <li>Navigazione completa Java ↔ ZUL</li>
-        <li>Supporto per tutti i tipi di binding ZK</li>
-        <li>Gutter icons per indicare gli usage</li>
+        <li><b>New:</b> Code completion inside binding expressions — type <code>@bind(vm.</code> to see ViewModel properties (including nested paths like <code>vm.person.</code>), or <code>@command('</code> to see commands.</li>
+        <li><b>New:</b> Quick fixes on unresolved bindings — Alt+Enter on a red <code>vm.foo</code> creates the property (field + getter + setter), on a red command creates the <code>@Command</code> method.</li>
+        <li><b>New:</b> Nested paths and expressions are fully supported: <code>@load(vm.address.city)</code>, <code>@load(vm.count gt 0 ? vm.name : '-')</code> — every segment navigates, renames and counts as a usage.</li>
+        <li><b>New:</b> Form binding — <code>fx.</code> properties resolve to the form's backing bean, and <code>before='save'</code> / <code>after=</code> resolve to commands.</li>
+        <li><b>Fix:</b> Commands with parameters (<code>@command('save', item=each)</code>) are now recognised.</li>
+        <li><b>Fix:</b> Clicking the gutter icon on a Java method navigates to its .zul usages again.</li>
+        <li>Compatibility with IntelliJ IDEA 2026.3.</li>
+        <li>Build migrated to IntelliJ Platform Gradle Plugin 2.x.</li>
+    </ul>
+
+    <h3>Version 1.1.2</h3>
+    <ul>
+        <li><b>New:</b> Java language injection inside &lt;zscript&gt; blocks — full code completion, syntax highlighting, and navigation available.</li>
+        <li><b>Fix:</b> Import resolution logic reworked — methods and variables used in .zul files no longer show a spurious "No usages" tag in the IDE.</li>
+    </ul>
+
+    <h3>Version 1.0.0</h3>
+    <ul>
+        <li>Initial release.</li>
+        <li>Automatic usage detection for getters and setters referenced in .zul bindings.</li>
+        <li>Full Java ↔ ZUL navigation.</li>
+        <li>Support for all ZK binding types.</li>
+        <li>Gutter icons indicating .zul usages.</li>
     </ul>
     ]]></change-notes>
 
-    <!-- Requires IntelliJ IDEA 2026.1+ -->
+    <!-- Requires IntelliJ IDEA 2026.1+ (since/until build patched from build.gradle.kts) -->
     <idea-version since-build="261"/>
 
-    <!-- Plugin dependencies -->
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
     <depends>com.intellij.modules.xml</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- Implicit usage provider: marca getter/setter come "usati" se trovati in .zul -->
+        <!-- Marks getters/setters as "used" when referenced in .zul bindings -->
         <implicitUsageProvider implementation="com.zusby.zkplugin.ZkImplicitUsageProvider"/>
 
-        <!-- Reference contributor: permette navigazione da .zul a Java -->
-        <psi.referenceContributor 
+        <!-- Enables Ctrl+Click navigation from .zul binding expressions to Java -->
+        <psi.referenceContributor
                 language="XML"
                 implementation="com.zusby.zkplugin.ZkBindingReferenceContributor"/>
 
-        <!-- Line marker provider: mostra icone nella gutter dei metodi Java usati in .zul -->
-        <codeInsight.lineMarkerProvider 
+        <!-- Gutter icons on Java methods showing .zul usages -->
+        <codeInsight.lineMarkerProvider
                 language="JAVA"
                 implementationClass="com.zusby.zkplugin.ZkLineMarkerProvider"/>
 
-        <!-- Find usages provider: include usages nei file .zul -->
+        <!-- Extends Find Usages to include .zul binding references -->
         <referencesSearch implementation="com.zusby.zkplugin.ZkReferencesSearcher"/>
 
         <!-- Java language injection into <zscript> blocks -->
         <multiHostInjector implementation="com.zusby.zkplugin.ZkScriptInjector"/>
+
+        <!-- Completion of ViewModel properties / commands inside binding expressions -->
+        <completion.contributor language="XML"
+                                implementationClass="com.zusby.zkplugin.ZkCompletionContributor"/>
+        <typedHandler implementation="com.zusby.zkplugin.ZkTypedHandler"/>
     </extensions>
 
     <actions>
-        <!-- Azioni personalizzate se necessarie in futuro -->
     </actions>
 </idea-plugin>
