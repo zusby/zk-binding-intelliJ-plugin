@@ -33,7 +33,7 @@ public class ZkBindingParserTest extends TestCase {
     }
 
     public void testCommandWithParameters() {
-        assertEquals(List.of("command:save", "command:refresh"),
+        assertEquals(List.of("command:save", "global-command:refresh"),
                 parse("@command('save', item=each, flag=true) @global-command(\"refresh\")"));
     }
 

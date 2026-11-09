@@ -93,24 +93,43 @@ public abstract class ZkCreateMemberFix implements LocalQuickFix {
         }
     }
 
-    /** Creates {@code @Command public void name() {}}. */
-    public static final class Command extends ZkCreateMemberFix {
-        public Command(@NotNull PsiClass target, @NotNull String name) {
+    /** Creates {@code @<annotation> public void name() {}}. */
+    private abstract static class AnnotatedMethod extends ZkCreateMemberFix {
+        private final String annotationFqn;
+        private final String label;
+
+        AnnotatedMethod(@NotNull PsiClass target, @NotNull String name, String annotationFqn, String label) {
             super(target, name);
+            this.annotationFqn = annotationFqn;
+            this.label = label;
         }
 
         @Override
         public @NotNull String getName() {
-            return "Create command '" + name + "' in " + className();
+            return "Create " + label + " '" + name + "' in " + className();
         }
 
         @Override
         protected PsiElement create(@NotNull PsiClass cls, @NotNull PsiElementFactory factory) {
             PsiMethod method = factory.createMethodFromText(
-                    "@org.zkoss.bind.annotation.Command\npublic void " + name + "() {\n}", cls);
+                    "@" + annotationFqn + "\npublic void " + name + "() {\n}", cls);
             PsiElement added = cls.add(method);
             JavaCodeStyleManager.getInstance(cls.getProject()).shortenClassReferences(added);
             return added;
+        }
+    }
+
+    /** Creates {@code @Command public void name() {}}. */
+    public static final class Command extends AnnotatedMethod {
+        public Command(@NotNull PsiClass target, @NotNull String name) {
+            super(target, name, "org.zkoss.bind.annotation.Command", "command");
+        }
+    }
+
+    /** Creates {@code @GlobalCommand public void name() {}}. */
+    public static final class GlobalCommand extends AnnotatedMethod {
+        public GlobalCommand(@NotNull PsiClass target, @NotNull String name) {
+            super(target, name, ZkViewModelResolver.GLOBAL_COMMAND_FQN, "global command");
         }
     }
 }

@@ -1,0 +1,19 @@
+<html>
+<body>
+Reports ZK ViewModel member names in Java string literals that don't match any property or global command.
+<p>Checked places:</p>
+<ul>
+    <li><code>@NotifyChange</code>, <code>@SmartNotifyChange</code> and <code>@DependsOn</code> values: the property must exist in the enclosing class or its superclasses.</li>
+    <li><code>BindUtils.postNotifyChange(queue, scope, bean, "name")</code>: the property must exist on <code>bean</code>'s type.</li>
+    <li><code>BindUtils.postGlobalCommand(queue, scope, "name", args)</code>: a <code>@GlobalCommand</code> handler with that name must exist.</li>
+</ul>
+<p>A misspelled name is not a compile error and fails silently at runtime: the bound component is never refreshed.</p>
+<!-- tooltip end -->
+<p>Example:</p>
+<pre><code>@Command
+@NotifyChange("selectedItme") // typo: the UI never updates
+public void select() { ... }
+</code></pre>
+<p>The quick fix creates the missing property (field, getter and setter).</p>
+</body>
+</html>

@@ -1,0 +1,75 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      # IntelliJ 2026.3 platform classes are Java 25 bytecode, so the compiler must be JDK 25.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        run: ./gradlew test --console=plain
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin --console=plain
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests
+
+      - name: Upload plugin zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: build/distributions/*.zip
+
+  verify:
+    name: Plugin Verifier
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The verifier downloads every IDE listed in pluginVerification; free some disk first.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - name: Verify against target IDEs
+        run: ./gradlew verifyPlugin --console=plain
+
+      - name: Upload verifier report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifier-report
+          path: build/reports/pluginVerifier

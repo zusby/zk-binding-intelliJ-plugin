@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.zusby.zkplugin"
-version = "1.1.3"
+version = "1.2.0"
 
 repositories {
     mavenCentral()
@@ -42,6 +42,8 @@ dependencies {
 
 intellijPlatform {
     buildSearchableOptions = false
+    // No GUI forms; skipping bytecode instrumentation also avoids its JDK-layout lookup failing on some JDKs.
+    instrumentCode = false
 
     pluginConfiguration {
         ideaVersion {

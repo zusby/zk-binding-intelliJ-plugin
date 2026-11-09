@@ -25,7 +25,14 @@ import java.util.regex.Pattern;
  */
 public final class ZkBindingParser {
 
-    public enum Kind { PROPERTY, COMMAND }
+    public enum Kind {
+        PROPERTY, COMMAND, GLOBAL_COMMAND;
+
+        /** True for {@code @command} and {@code @global-command} names. */
+        public boolean isCommand() {
+            return this != PROPERTY;
+        }
+    }
 
     /** One property-path segment or command name, with offsets relative to the parsed text. */
     public static final class Token {
@@ -49,6 +56,7 @@ public final class ZkBindingParser {
 
         @Override
         public String toString() {
+            if (kind == Kind.GLOBAL_COMMAND) return "global-command:" + name;
             return kind == Kind.COMMAND ? "command:" + name
                     : root + "." + (qualifier.isEmpty() ? "" : String.join(".", qualifier) + ".") + name;
         }
@@ -71,7 +79,8 @@ public final class ZkBindingParser {
 
     private static final Pattern ANNOTATION = Pattern.compile("@([a-zA-Z][a-zA-Z-]*)\\s*\\(");
     private static final Set<String> PROPERTY_ANNOTATIONS = Set.of("bind", "load", "save", "init", "ref");
-    private static final Set<String> COMMAND_ANNOTATIONS = Set.of("command", "global-command");
+    private static final String COMMAND = "command";
+    private static final String GLOBAL_COMMAND = "global-command";
     private static final Pattern COMMAND_OPTION = Pattern.compile("\\b(?:before|after)\\s*=\\s*");
 
     private static final Pattern PATH_AT_END = Pattern.compile(
@@ -96,8 +105,8 @@ public final class ZkBindingParser {
             if (PROPERTY_ANNOTATIONS.contains(annotation)) {
                 scanPaths(text, argsStart, argsEnd, tokens);
                 scanCommandOptions(text, argsStart, argsEnd, tokens);
-            } else if (COMMAND_ANNOTATIONS.contains(annotation)) {
-                scanCommandName(text, argsStart, argsEnd, tokens);
+            } else if (commandKind(annotation) != null) {
+                scanCommandName(text, argsStart, argsEnd, commandKind(annotation), tokens);
             }
             from = Math.max(argsEnd, argsStart);
         }
@@ -127,9 +136,10 @@ public final class ZkBindingParser {
         if (annotation == null) return null;
         CharSequence args = text.subSequence(argsStart, text.length());
 
-        if (COMMAND_ANNOTATIONS.contains(annotation)) {
+        Kind commandKind = commandKind(annotation);
+        if (commandKind != null) {
             Matcher cm = COMMAND_NAME_AT_END.matcher(args);
-            return cm.find() ? new CompletionContext(Kind.COMMAND, null, List.of(), cm.group(1)) : null;
+            return cm.find() ? new CompletionContext(commandKind, null, List.of(), cm.group(1)) : null;
         }
         if (!PROPERTY_ANNOTATIONS.contains(annotation)) return null;
 
@@ -140,6 +150,13 @@ public final class ZkBindingParser {
         Matcher pm = PATH_AT_END.matcher(args);
         if (!pm.find()) return null;
         return new CompletionContext(Kind.PROPERTY, pm.group(1), splitPath(pm.group(2)), pm.group(3));
+    }
+
+    @Nullable
+    private static Kind commandKind(String annotation) {
+        if (COMMAND.equals(annotation)) return Kind.COMMAND;
+        if (GLOBAL_COMMAND.equals(annotation)) return Kind.GLOBAL_COMMAND;
+        return null;
     }
 
     private static List<String> splitPath(String dotted) {
@@ -220,11 +237,11 @@ public final class ZkBindingParser {
         }
     }
 
-    private static void scanCommandName(CharSequence text, int from, int to, List<Token> out) {
+    private static void scanCommandName(CharSequence text, int from, int to, Kind kind, List<Token> out) {
         int i = from;
         while (i < to && Character.isWhitespace(text.charAt(i))) i++;
         if (i >= to || (text.charAt(i) != '\'' && text.charAt(i) != '"')) return;
-        addQuotedCommand(text, i, to, out);
+        addQuotedCommand(text, i, to, kind, out);
     }
 
     private static void scanCommandOptions(CharSequence text, int from, int to, List<Token> out) {
@@ -236,20 +253,20 @@ public final class ZkBindingParser {
                 while (close < to && text.charAt(close) != '}') close++;
                 for (int k = i + 1; k < close; k++) {
                     char c = text.charAt(k);
-                    if (c == '\'' || c == '"') k = addQuotedCommand(text, k, close, out);
+                    if (c == '\'' || c == '"') k = addQuotedCommand(text, k, close, Kind.COMMAND, out);
                 }
             } else if (i < to && (text.charAt(i) == '\'' || text.charAt(i) == '"')) {
-                addQuotedCommand(text, i, to, out);
+                addQuotedCommand(text, i, to, Kind.COMMAND, out);
             }
         }
     }
 
     /** Adds the command name quoted at {@code quoteIndex}; returns the closing quote index. */
-    private static int addQuotedCommand(CharSequence text, int quoteIndex, int limit, List<Token> out) {
+    private static int addQuotedCommand(CharSequence text, int quoteIndex, int limit, Kind kind, List<Token> out) {
         int close = skipQuoted(text, quoteIndex, limit);
         String name = text.subSequence(quoteIndex + 1, Math.min(close, limit)).toString();
         if (close < limit && name.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
-            out.add(new Token(Kind.COMMAND, quoteIndex + 1, close, null, List.of(), name));
+            out.add(new Token(kind, quoteIndex + 1, close, null, List.of(), name));
         }
         return close;
     }

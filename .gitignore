@@ -30,8 +30,9 @@ Thumbs.db
 /build/
 /build
 build/
-/README.md
-/.gradle/9.0.0/fileHashes/fileHashes.bin
 /.gradle/
 
 /.intellijPlatform/
+
+# Local Claude Code settings
+.claude/settings.local.json

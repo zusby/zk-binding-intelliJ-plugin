@@ -5,6 +5,8 @@ import com.intellij.codeInspection.LocalQuickFixProvider;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.patterns.PlatformPatterns;
 import com.intellij.psi.*;
+import com.intellij.psi.impl.source.resolve.reference.impl.providers.JavaClassReferenceProvider;
+import com.intellij.psi.xml.XmlAttribute;
 import com.intellij.psi.xml.XmlAttributeValue;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.util.IncorrectOperationException;
@@ -13,8 +15,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Provides Ctrl+Click navigation, rename support and "create member" quick fixes for ZK
@@ -44,16 +49,108 @@ public class ZkBindingReferenceContributor extends PsiReferenceContributor {
             XmlAttributeValue attrValue = (XmlAttributeValue) element;
             TextRange valueRange = attrValue.getValueTextRange().shiftLeft(attrValue.getTextRange().getStartOffset());
             String raw = valueRange.substring(attrValue.getText());
-            if (raw.indexOf('@') < 0) return PsiReference.EMPTY_ARRAY;
+            int base = valueRange.getStartOffset();
+            String attrName = attrValue.getParent() instanceof XmlAttribute ? ((XmlAttribute) attrValue.getParent()).getName() : "";
+
+            List<PsiReference> references = new ArrayList<>();
+            if (raw.indexOf('@') < 0) {
+                // apply="com.example.MyComposer"
+                if ("apply".equals(attrName) && QUALIFIED_NAME.matcher(raw.trim()).matches()) {
+                    addClassReferences(attrValue, raw.trim(), base + raw.indexOf(raw.trim()), references);
+                }
+                return references.toArray(PsiReference.EMPTY_ARRAY);
+            }
 
             Set<String> roots = ZkViewModelResolver.roots((XmlFile) file);
-            List<PsiReference> references = new ArrayList<>();
             for (ZkBindingParser.Token t : ZkBindingParser.parse(raw)) {
                 if (t.kind == ZkBindingParser.Kind.PROPERTY && !roots.contains(t.root)) continue;
-                TextRange range = new TextRange(valueRange.getStartOffset() + t.start, valueRange.getStartOffset() + t.end);
-                references.add(new ZkBindingReference(attrValue, range, t));
+                TextRange range = new TextRange(base + t.start, base + t.end);
+                references.add(t.kind == ZkBindingParser.Kind.GLOBAL_COMMAND
+                        ? new ZkGlobalCommandReference(attrValue, range, t.name)
+                        : new ZkBindingReference(attrValue, range, t));
+            }
+
+            // @init('com.example.MyVm') in viewModel="...", @converter('...') / @validator('...') anywhere
+            Matcher m = CLASS_ANNOTATION.matcher(raw);
+            while (m.find()) {
+                if ("init".equals(m.group(1)) && !"viewModel".equals(attrName)) continue;
+                addClassReferences(attrValue, m.group(3), base + m.start(3), references);
             }
             return references.toArray(PsiReference.EMPTY_ARRAY);
+        }
+
+        /** References for every package / class segment of {@code qualifiedName}, with completion and rename on move. */
+        private static void addClassReferences(XmlAttributeValue host, String qualifiedName, int offset, List<PsiReference> out) {
+            Collections.addAll(out, CLASS_REFERENCES.getReferencesByString(qualifiedName, host, offset));
+        }
+    }
+
+    /** A dotted name: only those are treated as classes, plain names may be inline zscript classes or built-in converters. */
+    private static final Pattern QUALIFIED_NAME = Pattern.compile("[a-zA-Z_][\\w$]*(?:\\.[a-zA-Z_][\\w$]*)+");
+    private static final Pattern CLASS_ANNOTATION = Pattern.compile(
+            "@(init|converter|validator)\\s*\\(\\s*(['\"])(" + QUALIFIED_NAME.pattern() + ")\\2");
+    private static final JavaClassReferenceProvider CLASS_REFERENCES = new JavaClassReferenceProvider();
+
+    /**
+     * Reference from {@code @global-command('name')} to the {@code @GlobalCommand} methods that
+     * handle it. A global command is broadcast to every ViewModel, so it may resolve to several
+     * methods in different classes.
+     */
+    static class ZkGlobalCommandReference extends PsiPolyVariantReferenceBase<PsiElement> implements LocalQuickFixProvider {
+        private final String name;
+
+        ZkGlobalCommandReference(@NotNull PsiElement element, @NotNull TextRange range, @NotNull String name) {
+            super(element, range);
+            this.name = name;
+        }
+
+        String getName() {
+            return name;
+        }
+
+        @Override
+        public ResolveResult @NotNull [] multiResolve(boolean incompleteCode) {
+            List<PsiMethod> handlers = ZkViewModelResolver.globalCommands(getElement().getProject()).getOrDefault(name, List.of());
+            return PsiElementResolveResult.createResults(handlers);
+        }
+
+        /** Without ZK on the classpath nothing can resolve, so don't paint every global command red. */
+        @Override
+        public boolean isSoft() {
+            return !ZkViewModelResolver.isGlobalCommandAvailable(getElement().getProject());
+        }
+
+        @Override
+        public boolean isReferenceTo(@NotNull PsiElement element) {
+            return element instanceof PsiMethod && ZkViewModelResolver.globalCommandNames((PsiMethod) element).contains(name);
+        }
+
+        @Override
+        public PsiElement handleElementRename(@NotNull String newElementName) throws IncorrectOperationException {
+            for (ResolveResult r : multiResolve(false)) {
+                if (r.getElement() instanceof PsiMethod && ZkViewModelResolver.hasExplicitCommandName((PsiMethod) r.getElement())) {
+                    return getElement();   // @GlobalCommand("name") keeps its name when the method is renamed
+                }
+            }
+            return super.handleElementRename(newElementName);
+        }
+
+        /** In .zul files completion comes from ZkCompletionContributor; in Java literals from here. */
+        @Override
+        public Object @NotNull [] getVariants() {
+            if (getElement() instanceof XmlAttributeValue) return EMPTY_ARRAY;
+            return ZkViewModelResolver.globalCommands(getElement().getProject()).keySet().toArray();
+        }
+
+        /** Offers to create the handler in the .zul file's ViewModel. */
+        @Override
+        public LocalQuickFix @Nullable [] getQuickFixes() {
+            if (!(getElement().getContainingFile() instanceof XmlFile) || multiResolve(false).length > 0) {
+                return LocalQuickFix.EMPTY_ARRAY;
+            }
+            PsiClass vm = ZkViewModelResolver.resolveViewModelClass((XmlFile) getElement().getContainingFile());
+            if (vm == null || vm instanceof PsiCompiledElement || !vm.isWritable()) return LocalQuickFix.EMPTY_ARRAY;
+            return new LocalQuickFix[]{new ZkCreateMemberFix.GlobalCommand(vm, name)};
         }
     }
 

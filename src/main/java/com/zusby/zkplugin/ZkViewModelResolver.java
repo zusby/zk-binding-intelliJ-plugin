@@ -1,8 +1,10 @@
 package com.zusby.zkplugin;
 
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.search.searches.AnnotatedElementsSearch;
 import com.intellij.psi.util.CachedValue;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
@@ -293,28 +295,83 @@ public final class ZkViewModelResolver {
      */
     @NotNull
     public static List<String> commandNames(@NotNull PsiMethod method) {
-        PsiAnnotation a = commandAnnotation(method);
+        return namesOf(method, zkAnnotation(method, COMMAND));
+    }
+
+    /**
+     * Global command names a method handles: the explicit {@code @GlobalCommand("...")} values,
+     * or the method name for a bare {@code @GlobalCommand}. Empty if it is not a global command.
+     */
+    @NotNull
+    public static List<String> globalCommandNames(@NotNull PsiMethod method) {
+        return namesOf(method, zkAnnotation(method, GLOBAL_COMMAND));
+    }
+
+    /** Command names of {@code kind} that {@code method} handles. */
+    @NotNull
+    public static List<String> commandNames(@NotNull PsiMethod method, @NotNull ZkBindingParser.Kind kind) {
+        return kind == ZkBindingParser.Kind.GLOBAL_COMMAND ? globalCommandNames(method) : commandNames(method);
+    }
+
+    /**
+     * True if the method's {@code @Command} / {@code @GlobalCommand} names its commands
+     * explicitly, so renaming the method keeps the name used in .zul files.
+     */
+    public static boolean hasExplicitCommandName(@NotNull PsiMethod method) {
+        PsiAnnotation a = zkAnnotation(method, COMMAND);
+        if (a == null) a = zkAnnotation(method, GLOBAL_COMMAND);
+        return a != null && !commandNames(a).isEmpty();
+    }
+
+    private static List<String> namesOf(PsiMethod method, @Nullable PsiAnnotation a) {
         if (a == null) return List.of();
         List<String> names = commandNames(a);
         return names.isEmpty() ? List.of(method.getName()) : names;
     }
 
-    /** True if the method's {@code @Command} names its commands explicitly (renaming the method keeps them). */
-    public static boolean hasExplicitCommandName(@NotNull PsiMethod method) {
-        PsiAnnotation a = commandAnnotation(method);
-        return a != null && !commandNames(a).isEmpty();
-    }
+    private static final String COMMAND = "Command";
+    private static final String GLOBAL_COMMAND = "GlobalCommand";
+    static final String GLOBAL_COMMAND_FQN = "org.zkoss.bind.annotation.GlobalCommand";
+    private static final Key<CachedValue<Map<String, List<PsiMethod>>>> GLOBAL_COMMANDS = Key.create("zk.global.commands");
 
+    /** The annotation on {@code owner} whose simple name is {@code shortName}, e.g. {@code Command}. */
     @Nullable
-    private static PsiAnnotation commandAnnotation(PsiMethod method) {
+    static PsiAnnotation zkAnnotation(@NotNull PsiModifierListOwner owner, @NotNull String shortName) {
+        PsiModifierList modifiers = owner.getModifierList();
+        if (modifiers == null) return null;
         // Check the short name first: resolving every annotation's qualified name is costly.
-        for (PsiAnnotation a : method.getModifierList().getAnnotations()) {
+        for (PsiAnnotation a : modifiers.getAnnotations()) {
             PsiJavaCodeReferenceElement ref = a.getNameReferenceElement();
-            if (ref == null || !"Command".equals(ref.getReferenceName())) continue;
+            if (ref == null || !shortName.equals(ref.getReferenceName())) continue;
             String qName = a.getQualifiedName();
-            if (qName != null && (qName.equals("Command") || qName.endsWith(".Command"))) return a;
+            if (qName != null && (qName.equals(shortName) || qName.endsWith("." + shortName))) return a;
         }
         return null;
+    }
+
+    /**
+     * Every {@code @GlobalCommand} method in the project and its libraries, keyed by command
+     * name. A global command is broadcast to all ViewModels, so its handlers can live in any
+     * class. Empty when ZK's {@code GlobalCommand} annotation is not on the classpath.
+     */
+    @NotNull
+    public static Map<String, List<PsiMethod>> globalCommands(@NotNull Project project) {
+        return CachedValuesManager.getManager(project).getCachedValue(project, GLOBAL_COMMANDS, () -> {
+            Map<String, List<PsiMethod>> result = new LinkedHashMap<>();
+            GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+            PsiClass annotation = JavaPsiFacade.getInstance(project).findClass(GLOBAL_COMMAND_FQN, scope);
+            if (annotation != null) {
+                for (PsiMethod m : AnnotatedElementsSearch.searchPsiMethods(annotation, scope).findAll()) {
+                    for (String n : globalCommandNames(m)) result.computeIfAbsent(n, k -> new ArrayList<>()).add(m);
+                }
+            }
+            return CachedValueProvider.Result.create(Collections.unmodifiableMap(result), PsiModificationTracker.MODIFICATION_COUNT);
+        }, false);
+    }
+
+    /** True if ZK's {@code @GlobalCommand} annotation is resolvable, i.e. ZK bind is on the classpath. */
+    public static boolean isGlobalCommandAvailable(@NotNull Project project) {
+        return JavaPsiFacade.getInstance(project).findClass(GLOBAL_COMMAND_FQN, GlobalSearchScope.allScope(project)) != null;
     }
 
     /** Reads explicit names from {@code @Command("a")} or {@code @Command({"a", "b"})}. */

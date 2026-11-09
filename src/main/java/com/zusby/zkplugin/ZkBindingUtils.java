@@ -99,6 +99,7 @@ public class ZkBindingUtils {
     @NotNull
     public static List<String> searchWords(@NotNull PsiMethod method) {
         List<String> words = new ArrayList<>(ZkViewModelResolver.commandNames(method));
+        words.addAll(ZkViewModelResolver.globalCommandNames(method));
         String property = getPropertyName(method);
         if (property != null) words.add(property);
         return words;
@@ -173,6 +174,9 @@ public class ZkBindingUtils {
             if (!t.name.equals(getPropertyName(method))) return false;
             if (t.root == null || !ZkViewModelResolver.roots(xmlFile).contains(t.root)) return false;
             owner = ZkViewModelResolver.ownerClass(xmlFile, t.root, t.qualifier);
+        } else if (t.kind == ZkBindingParser.Kind.GLOBAL_COMMAND) {
+            // Broadcast to every ViewModel: any @GlobalCommand handler with this name is a target.
+            return ZkViewModelResolver.globalCommandNames(method).contains(t.name);
         } else {
             if (!ZkViewModelResolver.commandNames(method).contains(t.name)) return false;
             owner = ZkViewModelResolver.ownerClass(xmlFile, ZkViewModelResolver.viewModelId(xmlFile), List.of());

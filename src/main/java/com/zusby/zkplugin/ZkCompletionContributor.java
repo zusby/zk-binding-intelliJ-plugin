@@ -14,6 +14,7 @@ import com.intellij.psi.xml.XmlFile;
 import com.intellij.util.ProcessingContext;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -69,6 +70,21 @@ public class ZkCompletionContributor extends CompletionContributor {
                         .withIcon(AllIcons.Nodes.Property)
                         .withTypeText(p.type != null ? p.type.getPresentableText() : null)
                         .withTailText(owner != null && owner != target ? "  (" + owner.getName() + ")" : null, true));
+            }
+            rs.stopHere();
+            return;
+        }
+
+        if (ctx.kind == ZkBindingParser.Kind.GLOBAL_COMMAND) {
+            CompletionResultSet rs = result.withPrefixMatcher(ctx.prefix);
+            for (Map.Entry<String, List<PsiMethod>> e : ZkViewModelResolver.globalCommands(file.getProject()).entrySet()) {
+                List<PsiMethod> handlers = e.getValue();
+                PsiClass owner = handlers.get(0).getContainingClass();
+                String where = handlers.size() > 1 ? handlers.size() + " handlers" : owner != null ? owner.getName() : null;
+                rs.addElement(LookupElementBuilder.create(handlers.get(0), e.getKey())
+                        .withIcon(AllIcons.Nodes.Method)
+                        .withTailText(where != null ? "  (" + where + ")" : null, true)
+                        .withTypeText("@GlobalCommand"));
             }
             rs.stopHere();
             return;

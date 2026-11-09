@@ -78,7 +78,8 @@ public class ZkLineMarkerProvider implements LineMarkerProvider {
         if (name.startsWith("set") && method.getParameterList().getParametersCount() == 1) {
             return true;
         }
-        return !ZkViewModelResolver.commandNames(method).isEmpty();
+        return !ZkViewModelResolver.commandNames(method).isEmpty()
+                || !ZkViewModelResolver.globalCommandNames(method).isEmpty();
     }
 
     /**
